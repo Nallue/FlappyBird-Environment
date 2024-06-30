@@ -33,6 +33,7 @@ class FlappyBird():
 		self.bg = pygame.image.load('img/bg.png')
 		self.ground_img = pygame.image.load('img/ground.png')
 		self.button_img = pygame.image.load('img/restart.png')
+		self.pipe_img = pygame.image.load("img/pipe.png")
 
 		#game properties
 		self.pipe_gap = 160
@@ -96,7 +97,7 @@ class FlappyBird():
 		def __init__(self, x, y, position, clase_externa):
 			self.clase_externa = clase_externa
 			pygame.sprite.Sprite.__init__(self)
-			self.image = pygame.image.load("img/pipe.png")
+			self.image = clase_externa.pipe_img
 			self.rect = self.image.get_rect()
 			#position variable determines if the pipe is coming from the bottom or top
 			#position 1 is from the top, -1 is from the bottom
@@ -116,29 +117,30 @@ class FlappyBird():
 	def get_state(self):
 		def lanzar_rayo_horizontal_distancia_tubo(sprite1, sprite_group, screen, screen_width, color):
 			start_pos = sprite1.rect.centery
-			min_distance = screen_width  # Empezamos con la distancia máxima posible (ancho de la pantalla)
+			min_distance = screen_width+self.pipe_img.get_width()  # Empezamos con la distancia máxima posible (ancho de la pantalla + pipe)
 			closest_sprite = None
-			collision_point = None
 
 			for sprite in sprite_group:
-				if sprite.rect.left > sprite1.rect.right and sprite.position == -1:
-					distance = sprite.rect.left - sprite1.rect.right
-					if distance < min_distance:
+				if sprite.rect.right > sprite1.rect.left and sprite.position == -1:
+					distance = sprite.rect.right - sprite1.rect.left
+					if distance <= min_distance:
 						min_distance = distance
 						closest_sprite = sprite
-						collision_point = (sprite.rect.left, start_pos)
+						collision_point = (sprite.rect.right, start_pos)
 
 			if closest_sprite:
 				# Dibujar el rayo en la pantalla
-				pygame.draw.line(screen, color, (sprite1.rect.right, sprite1.rect.centery), collision_point, 2)
-				pygame.draw.line(screen, color, (sprite1.rect.left, closest_sprite.rect.top), (closest_sprite.rect.right, closest_sprite.rect.top), 2)
-				pygame.draw.line(screen, color, (sprite1.rect.left, closest_sprite.rect.top-self.pipe_gap), (closest_sprite.rect.right, closest_sprite.rect.top-self.pipe_gap), 2)
-				pygame.draw.line(screen, color, (sprite1.rect.left, sprite1.rect.top), (sprite1.rect.left+100, sprite1.rect.top),  2)
-				pygame.draw.line(screen, color, (sprite1.rect.left, sprite1.rect.bottom), (sprite1.rect.left+100, sprite1.rect.bottom),  2)
+				pygame.draw.line(screen, color, (sprite1.rect.left, sprite1.rect.bottom), (sprite1.rect.left, closest_sprite.rect.top), 2)
+				pygame.draw.line(screen, color, (sprite1.rect.right, sprite1.rect.top), (sprite1.rect.right, closest_sprite.rect.top-self.pipe_gap), 2)
 
-			return_list = [min_distance if closest_sprite else -1, closest_sprite.rect.top, closest_sprite.rect.top-self.pipe_gap, sprite1.rect.top, sprite1.rect.bottom, int(self.flappy.clicked)]
+			return_list = [closest_sprite.rect.top - sprite1.rect.bottom, closest_sprite.rect.top-self.pipe_gap - sprite1.rect.top, self.flappy.vel]
+
+			rwd = 0
+			if sprite1.rect.top > closest_sprite.rect.top-150 and sprite1.rect.bottom < closest_sprite.rect.top:
+				rwd = 0.5
 			
-			return return_list
+			return return_list, rwd
+
 		
 
 		# def lanzar_rayo_diagonal(sprite1, sprite_group, ang, screen_width, screen_height, screen, color):
@@ -175,12 +177,9 @@ class FlappyBird():
 		# 	return min_distance if closest_sprite else -1
 
 		
-		state = (lanzar_rayo_horizontal_distancia_tubo(self.flappy, self.pipe_group, self.screen, self.screen_width, self.red))
+		state, rwd = (lanzar_rayo_horizontal_distancia_tubo(self.flappy, self.pipe_group, self.screen, self.screen_width, self.red))
 		
-
-		state.append(self.flappy.vel) #Añadir velocidad al estado
-		#print(state)
-		return state
+		return state, rwd
 
 	def draw_text(self, text, font, text_col, x, y):
 		img = font.render(text, True, text_col)
@@ -231,8 +230,12 @@ class FlappyBird():
 
 		#draw ground
 		self.screen.blit(self.ground_img, (self.ground_scroll, 768))
-		return self.get_state()
-
+		state, _ =  self.get_state()
+		return state
+	
+	def get_score(self):
+		return self.score
+	
 	def action(self, act):
 		self.cont_pipe_timer += 1
 
@@ -240,24 +243,23 @@ class FlappyBird():
 		self.flappy.update(act)
 
 		#check score
-		rwd = 0
+		rwd = 0 #Used for rewarding the agent
 		if len(self.pipe_group) > 0:
 			if self.bird_group.sprites()[0].rect.left > self.pipe_group.sprites()[0].rect.left\
 				and self.bird_group.sprites()[0].rect.right < self.pipe_group.sprites()[0].rect.right\
 				and self.pass_pipe == False:
 				self.pass_pipe = True
-				rwd = 100
+				rwd = 1 #Used for rewarding the agent
 			if self.pass_pipe == True:
 				if self.bird_group.sprites()[0].rect.left > self.pipe_group.sprites()[0].rect.right:
 					self.score += 1
-					rwd = 200
 					self.pass_pipe = False
 
 		#look for collision
 		if pygame.sprite.groupcollide(self.bird_group, self.pipe_group, False, False) or self.flappy.rect.top < 0:
 			self.game_over = True
 		#once the bird has hit the ground it's game over and no longer flying
-		if self.flappy.rect.bottom >= 768:
+		if self.flappy.rect.bottom >= 768 or self.flappy.rect.top <= 0:
 			self.game_over = True
 			self.flying = False
 
@@ -285,12 +287,12 @@ class FlappyBird():
 		self.screen.blit(self.ground_img, (self.ground_scroll, 768))
 		self.draw_text(str(self.score), self.font, self.white, int(self.screen_width / 2), 20)
 
-		state = self.get_state()
+		state, rwd_ = self.get_state()
 		
 		if(self.show_window):
 			pygame.display.update()
 
-		return state, 1+rwd if self.game_over==False else -50, self.game_over
+		return state, rwd+rwd_ if self.game_over==False else -1, self.game_over
 
 	def close(self):
 		pygame.quit()
