@@ -1,20 +1,12 @@
 from deep_q_learning import DQNAgent
 from FlappyBird_env import FlappyBird
-
-
+import pygame 
+import time
 
 if __name__ == "__main__":
-   
 
-    agent = DQNAgent(4, 2)
-    agent.load_model('Trained_1_4in_2out/NN_epoch_34.pth')
-
-    reward_per_epoch = []
-    loss = []
-
-    episodes_per_epoch = 1000
-
-    epoch = 0
+    agent = DQNAgent(FlappyBird.observation_space(), FlappyBird.action_space())
+    agent.load_model('Trained/NN_epoch_9.pth') #copy here the relative path to the saved NN
 
     # Initialize environment once
     env = FlappyBird()
@@ -25,6 +17,10 @@ if __name__ == "__main__":
     state = env.reset()
     done = False
     while not done:
+        for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    raise KeyboardInterrupt
+        #time.sleep(0.01)
         action = agent.act(state)
-        state, _, _ = env.action(action)
+        state, _, done = env.action(action)
     env.close()

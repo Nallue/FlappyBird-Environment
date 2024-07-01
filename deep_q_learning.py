@@ -11,7 +11,7 @@ matplotlib.use('Agg')  # Usa el backend "Agg" (no interactivo)
 import matplotlib.pyplot as plt
 
 from FlappyBird_env import FlappyBird
-
+import pygame
 import time
 
 import os
@@ -130,15 +130,15 @@ if __name__ == "__main__":
         plt.xlabel('Epoch')
         plt.ylabel('Reward')
         plt.title('Reward per Epoch')
-        # Crear la carpeta "plots" si no existe
+        # create "plots" directory
         if not os.path.exists('plots'):
             os.makedirs('plots')
 
-        # Guardar el gráfico en la carpeta "plots" con nombre que contiene el número de epochs
+        #Save plot in "plots" directory
         plt.savefig(f'plots/{name_of_plot}.png', bbox_inches='tight', pad_inches=0.1)
 
 
-    agent = DQNAgent(3, 2)
+    agent = DQNAgent(FlappyBird.observation_space(), FlappyBird.action_space())
 
     reward_per_epoch = []
     loss = []
@@ -160,6 +160,11 @@ if __name__ == "__main__":
         total_reward = 0
         total_loss = 0
         for l in range(episodes_per_epoch):
+            #pygame event check
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    raise KeyboardInterrupt
+                
             action = agent.act(state)
             new_state, reward, done = env.action(action)
             agent.store_transition(state, action, reward, new_state, done)
@@ -175,11 +180,11 @@ if __name__ == "__main__":
         agent.print_stats()
 
         # Save model periodically
-        if True:
+        if True: # You can use something like epoch % 100 == 0
             env.close()
             agent.save_model(epoch)
             plot_draw(reward_per_epoch, f'reward_per_epoch{epoch}')
-            plot_draw(loss, f'loss_per_epoch{epoch}')
+            #plot_draw(loss, f'loss_per_epoch{epoch}') #If you want to save the loss plot
             env = FlappyBird()
 
         # Evaluating
@@ -188,6 +193,11 @@ if __name__ == "__main__":
         state = env.reset()
         done = False
         while not done:
+            #pygame event check
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    raise KeyboardInterrupt
+                
             if (env.get_score() > 20):
                 state = env.reset()
             action = agent.act(state)
